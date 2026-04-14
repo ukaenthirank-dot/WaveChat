@@ -1,0 +1,14 @@
+/* Desktop phone preview sizing for 6.5–6.8 inch class devices */
+@media (min-width: 900px) {
+    body {
+        background: #0f172a;
+    }
+
+    body .chat-shell.whatsapp-shell.whatsapp-web-frontend[data-preview-mode="mobile"] {
+        --device-width: 393px;
+        --device-height: 852px;
+        width: min(var(--device-width), 92vw);
+        height: min(var(--device-height), 92vh);
+        aspect-ratio: 393 / 852;
+    }
+}

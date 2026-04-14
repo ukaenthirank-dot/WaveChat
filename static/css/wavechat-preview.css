@@ -1,0 +1,61 @@
+﻿.chat-shell[data-preview-mode="mobile"] .avatar.has-photo,
+.chat-shell[data-preview-mode="mobile"] .avatar.has-image {
+    background-size: cover !important;
+    background-position: center !important;
+    background-repeat: no-repeat !important;
+    color: transparent !important;
+    overflow: hidden;
+}
+
+.chat-shell[data-preview-mode="mobile"] .call-history-row.is-missed .call-history-top strong {
+    color: #ff1f36;
+}
+
+.chat-shell[data-preview-mode="mobile"] .story-viewer-body .wave-story-placeholder {
+    display: grid;
+    gap: 14px;
+    justify-items: center;
+    text-align: center;
+}
+
+.chat-shell[data-preview-mode="mobile"] .story-viewer-body .wave-story-icon {
+    font-size: 3.25rem;
+    line-height: 1;
+}
+
+.chat-shell[data-preview-mode="mobile"] .story-viewer-body .wave-story-placeholder h3 {
+    margin: 0;
+    font-size: 1.95rem;
+    font-weight: 700;
+}
+
+.chat-shell[data-preview-mode="mobile"] .story-viewer-body .wave-story-placeholder p {
+    margin: 0;
+    font-size: 1.05rem;
+    color: rgba(255, 255, 255, 0.88);
+}
+
+.chat-shell[data-preview-mode="mobile"] .call-history-top strong {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+body.wavechat-preview-active {
+    min-height: 100vh;
+    display: grid;
+    place-items: center;
+    background: #f4f5f7;
+    overflow: hidden;
+}
+
+@media (min-width: 900px) {
+    body.wavechat-preview-active .chat-shell.whatsapp-shell.whatsapp-web-frontend[data-preview-mode="mobile"] {
+        width: min(393px, 92vw) !important;
+        height: min(852px, 92vh) !important;
+        border-radius: 34px;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        box-shadow: 0 36px 90px rgba(0, 0, 0, 0.42);
+        overflow: hidden;
+    }
+}

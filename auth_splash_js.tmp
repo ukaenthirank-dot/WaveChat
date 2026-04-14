@@ -1,0 +1,464 @@
+const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || "";
+
+const steps = Array.from(document.querySelectorAll(".auth-step"));
+const statusBox = document.getElementById("auth-status");
+const devOtpBox = document.getElementById("dev-otp-box");
+
+const phoneNumberInput = document.getElementById("phone-number");
+const phoneInputWrap = document.getElementById("phone-input-wrap");
+const phoneHint = document.getElementById("phone-hint");
+const requestOtpButton = document.getElementById("request-otp-btn");
+const countrySelectButton = document.getElementById("country-select-btn");
+const countryFlag = document.getElementById("country-flag");
+const countryName = document.getElementById("country-name");
+const countryDial = document.getElementById("country-dial");
+const phoneFlag = document.getElementById("phone-flag");
+const phoneDial = document.getElementById("phone-dial");
+
+const countrySheet = document.getElementById("country-sheet");
+const countryCloseButton = document.getElementById("country-close-btn");
+const countrySearch = document.getElementById("country-search");
+const countryList = document.getElementById("country-list");
+
+const otpInput = document.getElementById("otp-code");
+const otpCells = Array.from(document.querySelectorAll(".otp-cell"));
+const otpSubtext = document.getElementById("otp-subtext");
+const resendOtpButton = document.getElementById("resend-otp-btn");
+const verifyOtpButton = document.getElementById("verify-otp-btn");
+
+const displayNameInput = document.getElementById("display-name");
+const nameContinueButton = document.getElementById("name-continue-btn");
+
+const profilePhotoInput = document.getElementById("profile-photo-input");
+const photoChooseButton = document.getElementById("photo-choose-btn");
+const photoSkipButton = document.getElementById("photo-skip-btn");
+const photoIcon = document.getElementById("photo-icon");
+
+const enableNotifyButton = document.getElementById("enable-notify-btn");
+const notifySkipButton = document.getElementById("notify-skip-btn");
+
+const COUNTRY_FLAGS = {
+    US: String.fromCodePoint(0x1F1FA, 0x1F1F8),
+    GB: String.fromCodePoint(0x1F1EC, 0x1F1E7),
+    IN: String.fromCodePoint(0x1F1EE, 0x1F1F3),
+    CA: String.fromCodePoint(0x1F1E8, 0x1F1E6),
+    AU: String.fromCodePoint(0x1F1E6, 0x1F1FA),
+    DE: String.fromCodePoint(0x1F1E9, 0x1F1EA),
+};
+
+const state = {
+    step: "phone",
+    country: {
+        code: "US",
+        name: "United States",
+        dial: "+1",
+        flag: "🇺🇸",
+        length: 10,
+    },
+    phoneDigits: "",
+    otp: "",
+    redirect: "/",
+    photoUrl: "",
+};
+
+function setStatus(message = "", isError = false) {
+    if (!statusBox) {
+        return;
+    }
+    statusBox.textContent = message;
+    statusBox.classList.toggle("hidden", !message);
+    statusBox.classList.toggle("error-text", Boolean(isError));
+}
+
+function normalizeDigits(value) {
+    return String(value || "").replace(/\D/g, "");
+}
+
+function setStep(step) {
+    state.step = step;
+    steps.forEach((panel) => {
+        panel.classList.toggle("active", panel.dataset.step === step);
+    });
+    if (devOtpBox) {
+        devOtpBox.classList.toggle("hidden", step !== "otp");
+    }
+    if (step === "otp") {
+        otpInput?.focus();
+    }
+    if (step === "name") {
+        displayNameInput?.focus();
+    }
+    updateNameValidation();
+    setStatus("");
+}
+
+function updateCountryUI() {
+    const resolvedFlag = COUNTRY_FLAGS[state.country.code] || state.country.flag;
+    if (countryFlag) {
+        countryFlag.textContent = resolvedFlag;
+    }
+    if (countryName) {
+        countryName.textContent = state.country.name;
+    }
+    if (countryDial) {
+        countryDial.textContent = state.country.dial;
+    }
+    if (phoneFlag) {
+        phoneFlag.textContent = resolvedFlag;
+    }
+    if (phoneDial) {
+        phoneDial.textContent = state.country.dial;
+    }
+    updatePhoneValidation();
+}
+
+function buildFullNumber() {
+    return `${state.country.dial}${state.phoneDigits}`;
+}
+
+function formatPhoneDisplay() {
+    return `${state.country.dial} ${state.phoneDigits}`;
+}
+
+function updateOtpSubtext() {
+    if (!otpSubtext) {
+        return;
+    }
+    otpSubtext.textContent = `We sent a code to ${formatPhoneDisplay()}`;
+}
+
+function validatePhoneNumber() {
+    const digits = state.phoneDigits;
+    if (!digits) {
+        return { valid: false, message: "" };
+    }
+    const requiredLength = Number(state.country.length || 10);
+    if (digits.length < requiredLength) {
+        return {
+            valid: false,
+            message: `Please enter a valid ${state.country.name} phone number (${requiredLength} digits)`,
+        };
+    }
+    if (digits.length > requiredLength) {
+        return {
+            valid: false,
+            message: `Phone number should be ${requiredLength} digits`,
+        };
+    }
+    return {
+        valid: true,
+        message: `Valid ${state.country.name} phone number`,
+    };
+}
+
+function updatePhoneValidation() {
+    state.phoneDigits = normalizeDigits(phoneNumberInput?.value || "");
+    if (phoneNumberInput) {
+        phoneNumberInput.value = state.phoneDigits;
+    }
+    const result = validatePhoneNumber();
+    if (phoneInputWrap) {
+        phoneInputWrap.classList.toggle("is-valid", result.valid);
+        phoneInputWrap.classList.toggle("is-invalid", !result.valid && state.phoneDigits.length > 0);
+    }
+    if (phoneHint) {
+        phoneHint.textContent = result.message;
+        phoneHint.classList.toggle("valid", result.valid);
+        phoneHint.classList.toggle("error", !result.valid && state.phoneDigits.length > 0);
+    }
+    if (requestOtpButton) {
+        requestOtpButton.disabled = !result.valid;
+    }
+}
+
+function updateNameValidation() {
+    const value = displayNameInput?.value.trim() || "";
+    const valid = value.length >= 2;
+    displayNameInput?.classList.toggle("is-active", value.length > 0);
+    if (nameContinueButton) {
+        nameContinueButton.disabled = !valid;
+    }
+}
+
+function setOtpValue(value) {
+    const digits = normalizeDigits(value).slice(0, 6);
+    state.otp = digits;
+    if (otpInput) {
+        otpInput.value = digits;
+    }
+    otpCells.forEach((cell, index) => {
+        cell.textContent = digits[index] || "";
+        cell.classList.toggle("filled", Boolean(digits[index]));
+    });
+    if (verifyOtpButton) {
+        verifyOtpButton.disabled = digits.length !== 6;
+    }
+}
+
+async function apiFetch(path, body) {
+    const response = await fetch(path, {
+        method: "POST",
+        credentials: "same-origin",
+        headers: {
+            "Content-Type": "application/json",
+            Accept: "application/json",
+            "X-CSRFToken": csrfToken,
+        },
+        body: JSON.stringify(body),
+    });
+
+    const contentType = response.headers.get("content-type") || "";
+    let data = null;
+    if (contentType.includes("application/json")) {
+        data = await response.json();
+    } else {
+        const raw = await response.text();
+        try {
+            data = JSON.parse(raw);
+        } catch (_error) {
+            data = null;
+        }
+    }
+    if (!data) {
+        throw new Error("Server error. Please try again.");
+    }
+    if (!response.ok || data.ok === false) {
+        throw new Error(data.error || "Request failed.");
+    }
+    return data;
+}
+
+async function requestOtp() {
+    const result = validatePhoneNumber();
+    if (!result.valid) {
+        setStatus(result.message || "Enter a valid phone number.", true);
+        updatePhoneValidation();
+        return;
+    }
+
+    if (requestOtpButton) {
+        requestOtpButton.disabled = true;
+    }
+    setStatus("Requesting OTP...");
+    devOtpBox?.classList.add("hidden");
+
+    try {
+        const data = await apiFetch("/auth/request-otp", {
+            phoneNumber: buildFullNumber(),
+        });
+        setStatus(data.message || "OTP sent.");
+        if (data.devOtp && devOtpBox) {
+            devOtpBox.textContent = `Development OTP: ${data.devOtp}`;
+            devOtpBox.classList.remove("hidden");
+        } else {
+            devOtpBox?.classList.add("hidden");
+        }
+        setOtpValue("");
+        updateOtpSubtext();
+        setStep("otp");
+    } catch (error) {
+        setStatus(error.message, true);
+    } finally {
+        if (requestOtpButton) {
+            requestOtpButton.disabled = false;
+        }
+    }
+}
+
+async function verifyOtpAndContinue() {
+    if (state.otp.length !== 6) {
+        setStatus("Enter the 6-digit verification code.", true);
+        return;
+    }
+    setStep("name");
+}
+
+async function submitNameAndVerify() {
+    const displayName = displayNameInput?.value.trim() || "";
+    if (displayName.length < 2) {
+        setStatus("Display name must be at least 2 characters.", true);
+        return;
+    }
+
+    setStatus("Verifying OTP...");
+    if (nameContinueButton) {
+        nameContinueButton.disabled = true;
+    }
+    try {
+        const data = await apiFetch("/auth/verify-otp", {
+            phoneNumber: buildFullNumber(),
+            displayName,
+            otp: state.otp,
+        });
+        state.redirect = data.redirect || "/";
+        sessionStorage.setItem("wavechat-show-splash", "1");
+        setStep("photo");
+    } catch (error) {
+        setStatus(error.message, true);
+        setStep("otp");
+    } finally {
+        if (nameContinueButton) {
+            nameContinueButton.disabled = false;
+        }
+    }
+}
+
+function finishOnboarding() {
+    window.location.href = state.redirect || "/";
+}
+
+function openCountrySheet() {
+    if (!countrySheet) {
+        return;
+    }
+    countrySheet.classList.remove("hidden");
+    countrySheet.setAttribute("aria-hidden", "false");
+    countrySearch?.focus();
+}
+
+function closeCountrySheet() {
+    if (!countrySheet) {
+        return;
+    }
+    countrySheet.classList.add("hidden");
+    countrySheet.setAttribute("aria-hidden", "true");
+    if (countrySearch) {
+        countrySearch.value = "";
+    }
+    filterCountryList("");
+}
+
+function selectCountryFromButton(button) {
+    if (!button) {
+        return;
+    }
+    const flagText = button.querySelector(".flag")?.textContent?.trim() || COUNTRY_FLAGS[button.dataset.code || ""] || "";
+    state.country = {
+        code: button.dataset.code || "",
+        name: button.dataset.name || "Country",
+        dial: button.dataset.dial || "",
+        flag: button.dataset.flag || "🏳️",
+        length: Number(button.dataset.length || 10),
+    };
+    if (flagText) {
+        state.country.flag = flagText;
+    }
+    countryList?.querySelectorAll(".country-option").forEach((item) => {
+        item.classList.toggle("active", item === button);
+    });
+    updateCountryUI();
+    closeCountrySheet();
+}
+
+function filterCountryList(query) {
+    const value = String(query || "").trim().toLowerCase();
+    countryList?.querySelectorAll(".country-option").forEach((button) => {
+        const name = String(button.dataset.name || "").toLowerCase();
+        const dial = String(button.dataset.dial || "").toLowerCase();
+        const code = String(button.dataset.code || "").toLowerCase();
+        const match = !value || name.includes(value) || dial.includes(value) || code.includes(value);
+        button.classList.toggle("hidden", !match);
+    });
+}
+
+function handlePhotoSelection(file) {
+    if (!file || !photoIcon) {
+        return;
+    }
+    if (state.photoUrl) {
+        URL.revokeObjectURL(state.photoUrl);
+    }
+    state.photoUrl = URL.createObjectURL(file);
+    photoIcon.style.backgroundImage = `url(${state.photoUrl})`;
+    photoIcon.classList.add("photo-selected");
+    window.setTimeout(() => {
+        setStep("notify");
+    }, 400);
+}
+
+function attachListeners() {
+    phoneNumberInput?.addEventListener("input", updatePhoneValidation);
+    phoneNumberInput?.addEventListener("keydown", (event) => {
+        if (event.key === "Enter") {
+            event.preventDefault();
+            requestOtp();
+        }
+    });
+
+    requestOtpButton?.addEventListener("click", requestOtp);
+    resendOtpButton?.addEventListener("click", requestOtp);
+
+    otpInput?.addEventListener("input", (event) => {
+        setOtpValue(event.target.value);
+    });
+    otpInput?.addEventListener("keydown", (event) => {
+        if (event.key === "Enter") {
+            event.preventDefault();
+            verifyOtpAndContinue();
+        }
+    });
+    document.getElementById("otp-grid")?.addEventListener("click", () => {
+        otpInput?.focus();
+    });
+
+    verifyOtpButton?.addEventListener("click", verifyOtpAndContinue);
+
+    nameContinueButton?.addEventListener("click", submitNameAndVerify);
+    displayNameInput?.addEventListener("keydown", (event) => {
+        if (event.key === "Enter") {
+            event.preventDefault();
+            submitNameAndVerify();
+        }
+    });
+    displayNameInput?.addEventListener("input", updateNameValidation);
+
+    countrySelectButton?.addEventListener("click", openCountrySheet);
+    countryCloseButton?.addEventListener("click", closeCountrySheet);
+    countrySheet?.addEventListener("click", (event) => {
+        if (event.target === countrySheet) {
+            closeCountrySheet();
+        }
+    });
+    countrySearch?.addEventListener("input", (event) => {
+        filterCountryList(event.target.value);
+    });
+    countryList?.addEventListener("click", (event) => {
+        const button = event.target.closest(".country-option");
+        if (button) {
+            selectCountryFromButton(button);
+        }
+    });
+
+    profilePhotoInput?.addEventListener("change", (event) => {
+        const file = event.target.files?.[0];
+        handlePhotoSelection(file);
+    });
+    photoChooseButton?.addEventListener("click", () => {
+        profilePhotoInput?.click();
+    });
+    photoSkipButton?.addEventListener("click", () => {
+        setStep("notify");
+    });
+
+    enableNotifyButton?.addEventListener("click", async () => {
+        if ("Notification" in window) {
+            try {
+                const permission = await Notification.requestPermission();
+                if (permission !== "granted") {
+                    setStatus("Notifications are disabled. You can enable them later.", true);
+                }
+            } catch (_error) {
+                setStatus("Unable to request notifications right now.", true);
+            }
+        }
+        finishOnboarding();
+    });
+
+    notifySkipButton?.addEventListener("click", finishOnboarding);
+}
+
+updateCountryUI();
+updatePhoneValidation();
+setOtpValue("");
+updateNameValidation();
+attachListeners();
